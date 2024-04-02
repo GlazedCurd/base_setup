@@ -1,0 +1,113 @@
+version: "3.3"
+services:
+  traefik:
+    image: "traefik:v2.6"
+    command:
+      - "--log.level=DEBUG"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:8080"
+      - "--api.insecure=false"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    depends_on:
+      - fluentd
+    ports:
+      - "8080:8080"
+    links:
+      - fluentd
+
+  testservice_a:
+    build: ./testservice
+    depends_on:
+      - fluentd
+    links:
+      - fluentd
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.testservice_a.rule=Host(`a.localhost`)"
+    ports:
+      - "8080"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: 127.0.0.1:24224
+        tag: jsonlog.service_a
+        fluentd-async: "true"
+
+  testservice_b:
+    build: ./testservice
+    depends_on:
+      - fluentd
+    links:
+      - fluentd
+    ports:
+      - "8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.testservice_b.rule=Host(`b.localhost`)"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: 127.0.0.1:24224
+        tag: jsonlog.service_b
+        fluentd-async: "true"
+
+  fluentd:
+    build: ./fluentd
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+    ports:
+      - "127.0.0.1:24224:24224"
+      - "127.0.0.1:24224:24224/udp"
+      - "127.0.0.1:24231:24231"
+    depends_on:
+      - mongo_logs
+    links:
+      - mongo_logs
+    environment:
+      MONGODB_FLUENTD_USER: ${MONGODB_FLUENTD_USER}
+      MONGODB_FLUENTD_PWD: ${MONGODB_FLUENTD_PWD}
+
+  mongo_logs:
+    image: mongo
+    restart: always
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - ./storage/mongo_logs:/data/db
+      - ./mongo/data/init.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ADMIN_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ADMIN_PWD}
+      MONGO_INITDB_DATABASE: fluentd
+      MONGODB_FLUENTD_USER: ${MONGODB_FLUENTD_USER}
+      MONGODB_FLUENTD_PWD: ${MONGODB_FLUENTD_PWD}
+
+  prometheus:
+    image: prom/prometheus
+    user: root
+    ports:
+      - 127.0.0.1:9090:9090
+    links:
+      - fluentd
+      - alertmanager
+    depends_on:
+      - fluentd
+      - alertmanager
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./prometheus/config:/etc/prometheus:ro
+      - ./storage/prometheus/data:/prometheus:rw
+
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    ports:
+      - "9093"
+    volumes:
+      - ./alertmanager/config:/config
+      - ./storage/alertmanager/data:/data
+    command: --config.file=/config/conf.yaml

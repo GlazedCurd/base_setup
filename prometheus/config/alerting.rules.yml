@@ -1,0 +1,7 @@
+groups:
+  - name: Alerts
+    rules:
+    - alert: Error Level
+      expr: rate(logger_event_code{level='error'}[30s]) > 0
+      annotations:
+        summary: Тестовый алерт ksgiv
