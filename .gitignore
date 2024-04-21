@@ -157,4 +157,4 @@ storage/prometheus/*
 storage/traefik/*
 
 proxy/acme.json
-alertmanager/config/config.yaml
+alertmanager/config/conf.yaml

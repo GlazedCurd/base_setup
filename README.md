@@ -15,7 +15,7 @@ To start this example you have to create alermanager config `conf.yaml` in the f
 
 You can start the example with this command. 
 ```
-docker-compose --env-file=dev.env up --force-recreate --build
+docker compose --env-file=dev.env up --force-recreate --build
 ```
 Click this link http://a.localhost:8080/abc to get a message about "invalid id". This request produces a log message in one of the services. 
 ```json
